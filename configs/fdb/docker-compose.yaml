@@ -1,0 +1,23 @@
+version: '3'
+services:
+  fdb-central:
+    image: tigrisdata/foundationdb:7.1.7
+    environment:
+      FDB_NETWORKING_MODE: host
+      FDB_PORT: 4500
+    ports:
+      - 4500:4500
+  fdb-eu:
+    image: tigrisdata/foundationdb:7.1.7
+    environment:
+      FDB_NETWORKING_MODE: host
+      FDB_PORT: 4501
+    ports:
+      - 4501:4501
+  fdb-us:
+    image: tigrisdata/foundationdb:7.1.7
+    environment:
+      FDB_NETWORKING_MODE: host
+      FDB_PORT: 4502
+    ports:
+      - 4502:4502

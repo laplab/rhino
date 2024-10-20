@@ -1,0 +1,13 @@
+address = "0.0.0.0:3001"
+
+control_address = "ws://localhost:3003"
+
+local_region = "eu-west-2"
+
+[[regions]]
+region = "eu-west-2"
+address = "ws://localhost:3002"
+
+[[regions]]
+region = "us-east-2"
+address = "ws://localhost:3004"

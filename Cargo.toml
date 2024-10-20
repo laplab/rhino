@@ -1,0 +1,47 @@
+[package]
+name = "mahogany"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "mahogany"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api_server"
+path = "src/api_server/main.rs"
+
+[[bin]]
+name = "region_server"
+path = "src/region_server/main.rs"
+
+[[bin]]
+name = "control_server"
+path = "src/control_server/main.rs"
+
+[[bin]]
+name = "replicator"
+path = "src/replicator/main.rs"
+
+[dependencies]
+tokio = { version = "1.38.0", features = ["full"] }
+foundationdb = { version = "0.9.0", features = [
+    "uuid",
+    "embedded-fdb-include",
+    "fdb-7_1",
+] }
+axum = "0.7.5"
+serde = "1.0.203"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
+futures-util = "0.3.30"
+serde_json = "1.0.115"
+argh = "0.1.12"
+toml = "0.8.12"
+tokio-util = "0.7.11"
+ulid = "1.1.2"
+derive_more = "0.99.18"
+exponential-backoff = "1.2.0"
+itertools = "0.13.0"

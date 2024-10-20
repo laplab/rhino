@@ -1,0 +1,5 @@
+address = "0.0.0.0:3003"
+
+cluster_file = "configs/fdb/fdb-central.cluster"
+
+regions = ["eu-west-2", "us-east-2"]
