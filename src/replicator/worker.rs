@@ -4,7 +4,7 @@ use foundationdb::{FdbBindingError, RetryableTransaction};
 use futures_util::Future;
 use tokio::time::Duration;
 
-use mahogany::{
+use rhino::{
     region_server::{ClientRequestPayload, ClientResponsePayload},
     regional_multiplexed_ws, FdbClient, FdbQueueError, GlobalTableSchemasReplicationQueue, LeaseId,
     Region, RegionInfo, RegionalStreams, ShardRoutingReplicationQueue, TokenReplicationQueue,

@@ -898,28 +898,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
-name = "mahogany"
-version = "0.1.0"
-dependencies = [
- "argh",
- "axum",
- "derive_more",
- "exponential-backoff",
- "foundationdb",
- "futures-util",
- "itertools 0.13.0",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "toml",
- "tracing",
- "tracing-subscriber",
- "ulid",
-]
-
-[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1243,6 +1221,28 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
+
+[[package]]
+name = "rhino"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "axum",
+ "derive_more",
+ "exponential-backoff",
+ "foundationdb",
+ "futures-util",
+ "itertools 0.13.0",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+]
 
 [[package]]
 name = "rustc-demangle"

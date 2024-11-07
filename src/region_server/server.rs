@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use mahogany::{
+use rhino::{
     recv_or_stop,
     region_server::{ClientRequest, ClientRequestPayload, ClientResponse, ClientResponsePayload},
     run_ws_server, send_or_stop, AuthManager, FdbClient, FdbValue, Region, RhinoTable,

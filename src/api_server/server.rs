@@ -6,7 +6,7 @@ use tokio::sync::{
     RwLock,
 };
 
-use mahogany::{
+use rhino::{
     api_server::{ClientRequest, ClientRequestPayload, ClientResponse, ClientResponsePayload},
     control_server, multiplexed_ws, recv_or_stop, region_server, regional_multiplexed_ws,
     run_ws_server, send_on_error, send_or_stop, ControlStreams, Region, RegionInfo,
@@ -356,7 +356,7 @@ impl ApiHandlerState {
         &self,
         tenant_id: String,
         shard_name: String,
-    ) -> Result<region_server::ClientResponse, mahogany::WebsocketMultiplexerError> {
+    ) -> Result<region_server::ClientResponse, rhino::WebsocketMultiplexerError> {
         async {
             let mut local_handler = self
                 .local_streams
@@ -378,7 +378,7 @@ impl ApiHandlerState {
         &self,
         tenant_id: String,
         shard_name: String,
-    ) -> Result<control_server::ClientResponse, mahogany::WebsocketMultiplexerError> {
+    ) -> Result<control_server::ClientResponse, rhino::WebsocketMultiplexerError> {
         async {
             let mut handler = self
                 .control_streams

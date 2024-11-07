@@ -1,4 +1,4 @@
-use mahogany::{Region, RegionInfo};
+use rhino::{Region, RegionInfo};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

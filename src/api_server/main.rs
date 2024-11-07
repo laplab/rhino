@@ -4,7 +4,7 @@ use argh::FromArgs;
 use tracing::error;
 
 use crate::config::Config;
-use mahogany::{AuthManager, FdbClient};
+use rhino::{AuthManager, FdbClient};
 
 pub mod config;
 pub mod server;

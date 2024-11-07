@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use mahogany::{Region, RegionInfo};
+use rhino::{Region, RegionInfo};
 
 // TODO: validate addresses.
 

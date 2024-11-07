@@ -1,11 +1,11 @@
 [package]
-name = "mahogany"
+name = "rhino"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [lib]
-name = "mahogany"
+name = "rhino"
 path = "src/lib.rs"
 
 [[bin]]

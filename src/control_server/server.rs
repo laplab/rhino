@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use mahogany::{
+use rhino::{
     control_server::{ClientRequest, ClientRequestPayload, ClientResponse, ClientResponsePayload},
     recv_or_stop, run_ws_server, send_or_stop, AuthManager, FdbClient,
     GlobalTableSchemasReplicationQueue, Region, RoutingManager, RoutingManagerError, SchemaManager,

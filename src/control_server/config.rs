@@ -1,4 +1,4 @@
-use mahogany::Region;
+use rhino::Region;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

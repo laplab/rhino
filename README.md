@@ -15,9 +15,9 @@ In terms of edge databases in general, [Turso](https://turso.tech/) is definitel
     - All databases of Turso are a part of a "database group". Database group has a fixed primary location, which cannot be changed. This means that if you want to put your primary (which is responsible for all writes) close to the user, you need multiple database groups in various locations. The number of these groups is severely limited on all plans but the enterprise - which is a signal to me that they do not expect a typical user to have multiple groups. Even worse, you cannot control the primary location of a group from the SDK - you need to manually use their CLI or their raw Platform API - another signal that they do not expect this behaviour to be common. This all means that they basically want the developer to pick a couple of key locations and suffer from latency on all writes if the user is not close to them.
     - Rhino allows the developer to pick the storage location for each small logical database they create, right from the SDK. This means that the user's data will always be stored in the location closest to them.
 
-## Various servers of mahogany
+## Various servers of Rhino
 
-Mahogany consists of 4 types of servers.
+Rhino consists of 4 types of servers.
 
 - **API server** A WebSocket server which users connect to. This server is designed to handle external traffic, so it is safe to expose it to the internet. API server never connects to FDB clusters directly and performs all operations through Region servers.
 - **Region server** An HTTP server which exposes operations on a single FDB cluster. These operations include: add an auth token, create a shard, insert some rows into a table, etc. This server should never be exposed to the internet.
@@ -26,7 +26,7 @@ Mahogany consists of 4 types of servers.
 
 All servers are stateless (as in "all data is stored in FDB"). All operations are idempotent (I think).
 
-## Starting servers of mahogany
+## Starting servers of Rhino
 
 ```
 ./scripts/api_server.sh
