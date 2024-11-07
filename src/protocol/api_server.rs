@@ -1,6 +1,8 @@
+use std::{collections::HashMap, hash::Hash};
+
 use serde::{Deserialize, Serialize};
 
-use crate::{Region, WithCorrelationId};
+use crate::{Region, SerializableFdbValue, WithCorrelationId};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientRequest {
@@ -10,9 +12,27 @@ pub struct ClientRequest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ClientRequestPayload {
-    Login { token: String },
-    CreateShard { name: String, region: Region },
-    CreateTable { name: String, pk: Vec<String> },
+    Login {
+        token: String,
+    },
+    CreateShard {
+        name: String,
+        region: Region,
+    },
+    CreateTable {
+        name: String,
+        pk: Vec<String>,
+    },
+    GetRow {
+        shard_name: String,
+        table_name: String,
+        pk: HashMap<String, SerializableFdbValue>,
+    },
+    SetRow {
+        shard_name: String,
+        table_name: String,
+        row: HashMap<String, SerializableFdbValue>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -27,15 +47,32 @@ pub enum ClientResponsePayload {
 
     InvalidToken,
     AlreadyLoggedIn,
-    LoggedIn { region: Region },
+    LoggedIn {
+        region: Region,
+    },
 
     ShardCreated,
     ShardAlreadyExists,
+    ShardNotFound,
 
     TableCreated,
     TableAlreadyExists,
+    TableNotFound,
 
-    PleaseRetry { reason: String },
+    PleaseRetry {
+        reason: String,
+    },
+
+    RowFound {
+        row: HashMap<String, SerializableFdbValue>,
+    },
+    RowNotFound,
+
+    MissingPkValue {
+        component: String,
+    },
+
+    SetRowCompleted,
 }
 
 impl ClientResponsePayload {

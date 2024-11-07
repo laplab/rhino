@@ -240,7 +240,7 @@ impl ControlHandlerState {
                 let table_name = &table_name;
                 async move {
                     let schema = SchemaManager::new(db, &tx).await?;
-                    schema.get_table_pk(tenant_id, &table_name).await
+                    schema.get_table_pk(tenant_id, table_name).await
                 }
             })
             .await;

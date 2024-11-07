@@ -4,7 +4,7 @@ use mahogany::{
     recv_or_stop,
     region_server::{ClientRequest, ClientRequestPayload, ClientResponse, ClientResponsePayload},
     run_ws_server, send_or_stop, AuthManager, FdbClient, FdbValue, Region, RhinoTable,
-    RhinoTableError, RoutingManager, SchemaManager, SerialisableFdbValue,
+    RhinoTableError, RoutingManager, SchemaManager, SerializableFdbValue,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::error;
@@ -265,7 +265,7 @@ impl RegionHandlerState {
         tenant_id: String,
         shard_name: String,
         table_name: String,
-        row: HashMap<String, SerialisableFdbValue>,
+        row: HashMap<String, SerializableFdbValue>,
     ) {
         let row: HashMap<String, FdbValue> = row
             .into_iter()
@@ -307,7 +307,7 @@ impl RegionHandlerState {
         tenant_id: String,
         shard_name: String,
         table_name: String,
-        pk: HashMap<String, SerialisableFdbValue>,
+        pk: HashMap<String, SerializableFdbValue>,
     ) {
         let pk: HashMap<String, FdbValue> = pk
             .into_iter()

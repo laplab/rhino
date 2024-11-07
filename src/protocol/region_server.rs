@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{protocol::WithCorrelationId, Region, SerialisableFdbValue};
+use crate::{protocol::WithCorrelationId, Region, SerializableFdbValue};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientRequest {
@@ -28,13 +28,13 @@ pub enum ClientRequestPayload {
         tenant_id: String,
         shard_name: String,
         table_name: String,
-        row: HashMap<String, SerialisableFdbValue>,
+        row: HashMap<String, SerializableFdbValue>,
     },
     GetRow {
         tenant_id: String,
         shard_name: String,
         table_name: String,
-        pk: HashMap<String, SerialisableFdbValue>,
+        pk: HashMap<String, SerializableFdbValue>,
     },
 
     // Endpoints for replicator.
@@ -90,7 +90,7 @@ pub enum ClientResponsePayload {
     SetRowCompleted,
 
     RowFound {
-        row: HashMap<String, SerialisableFdbValue>,
+        row: HashMap<String, SerializableFdbValue>,
     },
     RowNotFound,
 

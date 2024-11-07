@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 
+use foundationdb::tenant;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     RwLock,
@@ -9,7 +10,7 @@ use mahogany::{
     api_server::{ClientRequest, ClientRequestPayload, ClientResponse, ClientResponsePayload},
     control_server, multiplexed_ws, recv_or_stop, region_server, regional_multiplexed_ws,
     run_ws_server, send_on_error, send_or_stop, ControlStreams, Region, RegionInfo,
-    RegionalStreams,
+    RegionalStreams, SerializableFdbValue,
 };
 
 struct ApiHandler {
@@ -73,6 +74,16 @@ impl ApiHandler {
                     tokio::spawn(state.handle_create_shard(name, region))
                 }
                 CreateTable { name, pk } => tokio::spawn(state.handle_create_table(name, pk)),
+                SetRow {
+                    shard_name,
+                    table_name,
+                    row,
+                } => tokio::spawn(state.handle_set_row(shard_name, table_name, row)),
+                GetRow {
+                    shard_name,
+                    table_name,
+                    pk,
+                } => tokio::spawn(state.handle_get_row(shard_name, table_name, pk)),
             };
         }
     }
@@ -97,11 +108,15 @@ impl ApiHandlerState {
         self.correlation_id.clone()
     }
 
+    fn retry_payload(&self, reason: impl ToString) -> ClientResponsePayload {
+        ClientResponsePayload::PleaseRetry {
+            reason: reason.to_string(),
+        }
+    }
+
     fn retry(&self, reason: impl ToString) -> ClientResponse {
         ClientResponse {
-            payload: ClientResponsePayload::PleaseRetry {
-                reason: reason.to_string(),
-            },
+            payload: self.retry_payload(reason),
             correlation_id: self.correlation_id(),
         }
     }
@@ -281,6 +296,326 @@ impl ApiHandlerState {
                 );
             }
             _ => panic!("unexpected message type"),
+        }
+    }
+
+    async fn set_to_region(
+        self,
+        tenant_id: String,
+        region: Region,
+        shard_name: String,
+        table_name: String,
+        row: HashMap<String, SerializableFdbValue>,
+    ) {
+        let streams = self.remote_streams.get(&region).unwrap();
+
+        let set_resp = send_on_error!(
+            async {
+                let mut handler = streams.create_stream(self.correlation_id()).await?;
+                handler.send(
+                    region_server::ClientRequestPayload::SetRow {
+                        tenant_id,
+                        shard_name,
+                        table_name,
+                        row,
+                    }
+                    .correlate(self.correlation_id()),
+                )?;
+                handler.recv().await
+            }
+            .await,
+            self.responses,
+            self.retry(format!("region {} is experiencing issues", region))
+        );
+
+        let result_payload = match set_resp.payload {
+            region_server::ClientResponsePayload::FdbError => {
+                self.retry_payload(format!("region {} is experiencing issues", region))
+            }
+            region_server::ClientResponsePayload::SetRowCompleted => {
+                ClientResponsePayload::SetRowCompleted
+            }
+            region_server::ClientResponsePayload::ShardNotFound => {
+                ClientResponsePayload::ShardNotFound
+            }
+            region_server::ClientResponsePayload::TableNotFound => {
+                ClientResponsePayload::TableNotFound
+            }
+            region_server::ClientResponsePayload::MissingPkValue { component } => {
+                ClientResponsePayload::MissingPkValue { component }
+            }
+            _ => panic!("unexpected error"),
+        };
+        send_or_stop!(
+            self.responses,
+            result_payload.correlate(self.correlation_id())
+        )
+    }
+
+    async fn try_get_shard_region_from_local(
+        &self,
+        tenant_id: String,
+        shard_name: String,
+    ) -> Result<region_server::ClientResponse, mahogany::WebsocketMultiplexerError> {
+        async {
+            let mut local_handler = self
+                .local_streams
+                .create_stream(self.correlation_id())
+                .await?;
+            local_handler.send(
+                region_server::ClientRequestPayload::GetShardRegion {
+                    tenant_id,
+                    shard_name,
+                }
+                .correlate(self.correlation_id()),
+            )?;
+            local_handler.recv().await
+        }
+        .await
+    }
+
+    async fn try_get_shard_region_from_control(
+        &self,
+        tenant_id: String,
+        shard_name: String,
+    ) -> Result<control_server::ClientResponse, mahogany::WebsocketMultiplexerError> {
+        async {
+            let mut handler = self
+                .control_streams
+                .create_stream(self.correlation_id())
+                .await?;
+            handler.send(
+                control_server::ClientRequestPayload::GetShardRegion {
+                    tenant_id,
+                    shard_name,
+                }
+                .correlate(self.correlation_id()),
+            )?;
+            handler.recv().await
+        }
+        .await
+    }
+
+    async fn handle_set_row(
+        self,
+        shard_name: String,
+        table_name: String,
+        row: HashMap<String, SerializableFdbValue>,
+    ) {
+        // Check if current connection is logged in.
+        let tenant_id = match &*self.tenant_id.read().await {
+            Some(tenant_id) => tenant_id.clone(),
+            None => {
+                send_or_stop!(
+                    self.responses,
+                    ClientResponsePayload::NotLoggedIn.correlate(self.correlation_id())
+                );
+                return;
+            }
+        };
+
+        // Check local metadata first.
+        let local_resp = send_on_error!(
+            self.try_get_shard_region_from_local(tenant_id.clone(), shard_name.clone())
+                .await,
+            self.responses,
+            self.retry(format!(
+                "region {} is experiencing issues",
+                self.local_region
+            ))
+        );
+
+        {
+            use region_server::ClientResponsePayload::*;
+            match local_resp.payload {
+                ShardLocated { region } => {
+                    return self
+                        .set_to_region(tenant_id, region, shard_name, table_name, row)
+                        .await;
+                }
+                ShardNotFound => {}
+                FdbError => {
+                    send_or_stop!(
+                        self.responses,
+                        self.retry(format!(
+                            "region {} is experiencing issues",
+                            self.local_region
+                        ))
+                    )
+                }
+                resp => {
+                    panic!(
+                        "unexpected message type: {}",
+                        serde_json::to_string(&resp).unwrap_or("unknown".to_string())
+                    )
+                }
+            }
+        }
+
+        // Go to global metadata storage.
+        let shard_region = send_on_error!(
+            self.try_get_shard_region_from_control(tenant_id.clone(), shard_name.clone())
+                .await,
+            self.responses,
+            self.retry("metadata storage is experiencing issues")
+        );
+
+        use control_server::ClientResponsePayload::*;
+        match shard_region.payload {
+            ShardLocated { region } => {
+                self.set_to_region(tenant_id, region, shard_name, table_name, row)
+                    .await
+            }
+            ShardNotFound => {
+                send_or_stop!(
+                    self.responses,
+                    ClientResponsePayload::ShardNotFound.correlate(self.correlation_id())
+                )
+            }
+            FdbError => {
+                send_or_stop!(
+                    self.responses,
+                    self.retry("metadata storage is experiencing issues")
+                );
+            }
+            resp => panic!(
+                "unexpected message type: {}",
+                serde_json::to_string(&resp).unwrap_or("unknown".to_string())
+            ),
+        }
+    }
+
+    async fn get_from_region(
+        &self,
+        tenant_id: String,
+        region: Region,
+        shard_name: String,
+        table_name: String,
+        pk: HashMap<String, SerializableFdbValue>,
+    ) {
+        let streams = self.remote_streams.get(&region).unwrap();
+
+        let get_resp = send_on_error!(
+            async {
+                let mut handler = streams.create_stream(self.correlation_id()).await?;
+                handler.send(
+                    region_server::ClientRequestPayload::GetRow {
+                        tenant_id,
+                        shard_name,
+                        table_name,
+                        pk,
+                    }
+                    .correlate(self.correlation_id()),
+                )?;
+                handler.recv().await
+            }
+            .await,
+            self.responses,
+            self.retry("metadata storage is experiencing issues")
+        );
+
+        use region_server::ClientResponsePayload::*;
+        let result_payload = match get_resp.payload {
+            FdbError => self.retry_payload(format!("region {} is experiencing issues", region)),
+            RowFound { row } => ClientResponsePayload::RowFound { row: row },
+            RowNotFound => ClientResponsePayload::RowNotFound,
+            ShardNotFound => ClientResponsePayload::ShardNotFound,
+
+            MissingPkValue { component } => ClientResponsePayload::MissingPkValue { component },
+            resp => panic!(
+                "unexpected error: [{}]",
+                serde_json::to_string(&resp).unwrap_or("unknown".to_string())
+            ),
+        };
+        send_or_stop!(
+            self.responses,
+            result_payload.correlate(self.correlation_id())
+        )
+    }
+
+    async fn handle_get_row(
+        self,
+        shard_name: String,
+        table_name: String,
+        pk: HashMap<String, SerializableFdbValue>,
+    ) {
+        // Check if current connection is logged in.
+        let tenant_id = match &*self.tenant_id.read().await {
+            Some(tenant_id) => tenant_id.clone(),
+            None => {
+                send_or_stop!(
+                    self.responses,
+                    ClientResponsePayload::NotLoggedIn.correlate(self.correlation_id())
+                );
+                return;
+            }
+        };
+
+        // Check local metadata first.
+        let local_resp = send_on_error!(
+            self.try_get_shard_region_from_local(tenant_id.clone(), shard_name.clone())
+                .await,
+            self.responses,
+            self.retry(format!(
+                "region {} is experiencing issues",
+                self.local_region
+            ))
+        );
+
+        {
+            use region_server::ClientResponsePayload::*;
+            match local_resp.payload {
+                ShardLocated { region } => {
+                    return self
+                        .get_from_region(tenant_id, region, shard_name, table_name, pk)
+                        .await;
+                }
+                ShardNotFound => {}
+                FdbError => {
+                    send_or_stop!(
+                        self.responses,
+                        self.retry("Error from {region} server storage")
+                    )
+                }
+                resp => {
+                    panic!(
+                        "unexpected message type: {}",
+                        serde_json::to_string(&resp).unwrap_or("unknown".to_string())
+                    )
+                }
+            }
+        }
+
+        // Go to global metadata storage.
+        let shard_region = send_on_error!(
+            self.try_get_shard_region_from_control(tenant_id.clone(), shard_name.clone())
+                .await,
+            self.responses,
+            self.retry("metadata storage is experiencing issues")
+        );
+
+        use control_server::ClientResponsePayload::*;
+        match shard_region.payload {
+            ShardLocated { region } => {
+                self.get_from_region(tenant_id, region, shard_name, table_name, pk)
+                    .await
+            }
+            ShardNotFound => {
+                send_or_stop!(
+                    self.responses,
+                    ClientResponsePayload::ShardNotFound.correlate(self.correlation_id())
+                )
+            }
+            FdbError => {
+                send_or_stop!(
+                    self.responses,
+                    self.retry("metadata storage is experiencing issues")
+                );
+            }
+            resp => panic!(
+                "unexpected message type: {}",
+                serde_json::to_string(&resp).unwrap_or("unknown".to_string())
+            ),
         }
     }
 }

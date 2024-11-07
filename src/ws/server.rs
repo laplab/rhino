@@ -124,7 +124,7 @@ where
                                 Message::Close(..) => Err("WS connection gracefully closed"),
                                 _ => Err("unexpected WS message type")
                             }).and_then(|text| {
-                                serde_json::from_str(&text).map_err(|_| "failed to parse message")
+                                serde_json::from_str(&text).map_err(|error| { error!(?error, "failed to parse message"); "failed to parse message"} )
                             })?;
 
                             if ingress_sender.send(ingress).is_err() {

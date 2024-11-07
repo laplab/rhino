@@ -2,7 +2,7 @@ import unittest
 import json
 import websocket
 from contextlib import closing
-from ulid import ULID
+from ulid import ulid as ULID
 import time
 import fdb
 from copy import deepcopy
@@ -172,82 +172,154 @@ class TestRhino(unittest.TestCase):
 
         # Wait for the replication of tokens to happen
         time.sleep(2)
+        def _create_table():
+            with self.ws(API_ADDR) as ws:
+                self.assertEqual(
+                    self.send_recv(ws, {'Login': {'token': 'test_token'}}),
+                    {'LoggedIn': {'region': 'eu-west-2'}}
+                )
 
-        with self.ws(API_ADDR) as ws:
-            self.assertEqual(
-                self.send_recv(ws, {'Login': {'token': 'test_token'}}),
-                {'LoggedIn': {'region': 'eu-west-2'}}
-            )
+                self.assertEqual(
+                    self.send_recv(ws, {'CreateTable': {'name': 'test_table', 'pk': ['first', 'second']}}),
+                    'TableCreated'
+                )
 
-            self.assertEqual(
-                self.send_recv(ws, {'CreateTable': {'name': 'test_table', 'pk': ['first', 'second']}}),
-                'TableCreated'
-            )
+                # Wait for the replication of schema information to happen
+                time.sleep(2)
 
-        # Wait for the replication of schema information to happen
-        time.sleep(2)
+        def _test_api_server():
+            row = {
+                'first': {
+                    'String': 'third_value',
+                },
+                'second': {
+                    'String': 'forth_value',
+                },
+                'something_else': {
+                    'U64': 5678,
+                },
+            }
 
-        row = {
-            'first': {
-                'String': 'first_value',
-            },
-            'second': {
-                'String': 'second_value',
-            },
-            'something_else': {
-                'U64': 1234,
-            },
-        }
-        for region in [EU_ADDR, US_ADDR]:
-            with self.ws(region) as ws:
+            with self.ws(API_ADDR) as ws:
+                self.assertEqual(
+                    self.send_recv(ws, {'Login': {'token': 'test_token'}}),
+                    {'LoggedIn': {'region': 'eu-west-2'}}
+                )
                 # Set
                 self.assertEqual(
-                    self.send_recv(ws, {'SetRow': {'tenant_id': 'invalid_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
-                    'TableNotFound',
+                    self.send_recv(ws, {'SetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
+                    'ShardNotFound',
+                )
+
+                # self.assertEqual(
+                #     self.send_recv(ws, {'SetRow': {'shard_name': 'test_shard', 'table_name': 'invalid_table', 'row': row}}),
+                #     'TableNotFound',
+                # )
+
+                self.assertEqual(
+                    self.send_recv(ws, {'CreateShard': {'name': 'test_shard', 'region': 'us-east-2'}}),
+                    'ShardCreated'
                 )
 
                 self.assertEqual(
-                    self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'invalid_table', 'row': row}}),
-                    'TableNotFound',
-                )
-
-                self.assertEqual(
-                    self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': {}}}),
+                    self.send_recv(ws, {'SetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'row': {}}}),
                     {'MissingPkValue': {'component': 'first'}},
                 )
 
                 self.assertEqual(
-                    self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
+                    self.send_recv(ws, {'SetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
                     'SetRowCompleted',
                 )
 
                 # Get
                 self.assertEqual(
-                    self.send_recv(ws, {'GetRow': {'tenant_id': 'invalid_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': row}}),
+                    self.send_recv(ws, {'GetRow': {'shard_name': 'test_shard', 'table_name': 'invalid_table', 'pk': row}}),
                     'TableNotFound',
                 )
 
                 self.assertEqual(
-                    self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'invalid_table', 'pk': row}}),
-                    'TableNotFound',
-                )
-
-                self.assertEqual(
-                    self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': {}}}),
+                    self.send_recv(ws, {'GetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': {}}}),
                     {'MissingPkValue': {'component': 'first'}},
                 )
 
                 self.assertEqual(
-                    self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': row}}),
+                    self.send_recv(ws, {'GetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': row}}),
                     {'RowFound': {'row': row}}
                 )
 
                 non_existing = deepcopy(row)
                 non_existing['first'] = {'String': 'non_existing'}
                 self.assertEqual(
-                    self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': non_existing}}),
+                    self.send_recv(ws, {'GetRow': {'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': non_existing}}),
                     'RowNotFound'
                 )
+
+
+        def _test_region_server():
+            row = {
+                'first': {
+                    'String': 'first_value',
+                },
+                'second': {
+                    'String': 'second_value',
+                },
+                'something_else': {
+                    'U64': 1234,
+                },
+            }
+            for region in [EU_ADDR, US_ADDR]:
+                with self.ws(region) as ws:
+                    # Set
+                    self.assertEqual(
+                        self.send_recv(ws, {'SetRow': {'tenant_id': 'invalid_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
+                        'TableNotFound',
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'invalid_table', 'row': row}}),
+                        'TableNotFound',
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': {}}}),
+                        {'MissingPkValue': {'component': 'first'}},
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'SetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'row': row}}),
+                        'SetRowCompleted',
+                    )
+
+                    # Get
+                    self.assertEqual(
+                        self.send_recv(ws, {'GetRow': {'tenant_id': 'invalid_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': row}}),
+                        'TableNotFound',
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'invalid_table', 'pk': row}}),
+                        'TableNotFound',
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': {}}}),
+                        {'MissingPkValue': {'component': 'first'}},
+                    )
+
+                    self.assertEqual(
+                        self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': row}}),
+                        {'RowFound': {'row': row}}
+                    )
+
+                    non_existing = deepcopy(row)
+                    non_existing['first'] = {'String': 'non_existing'}
+                    self.assertEqual(
+                        self.send_recv(ws, {'GetRow': {'tenant_id': 'test_tenant', 'shard_name': 'test_shard', 'table_name': 'test_table', 'pk': non_existing}}),
+                        'RowNotFound'
+                    )
+        _create_table()
+        _test_api_server()
+        _test_region_server()
 
 
 if __name__ == '__main__':

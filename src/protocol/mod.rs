@@ -46,12 +46,12 @@ pub struct RegionInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum SerialisableFdbValue {
+pub enum SerializableFdbValue {
     String(String),
     U64(u64),
 }
 
-impl From<FdbValue> for SerialisableFdbValue {
+impl From<FdbValue> for SerializableFdbValue {
     fn from(value: FdbValue) -> Self {
         match value {
             FdbValue::String(value) => Self::String(value),
@@ -60,11 +60,11 @@ impl From<FdbValue> for SerialisableFdbValue {
     }
 }
 
-impl From<SerialisableFdbValue> for FdbValue {
-    fn from(value: SerialisableFdbValue) -> Self {
+impl From<SerializableFdbValue> for FdbValue {
+    fn from(value: SerializableFdbValue) -> Self {
         match value {
-            SerialisableFdbValue::String(value) => Self::String(value),
-            SerialisableFdbValue::U64(value) => Self::U64(value),
+            SerializableFdbValue::String(value) => Self::String(value),
+            SerializableFdbValue::U64(value) => Self::U64(value),
         }
     }
 }
