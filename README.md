@@ -2,6 +2,12 @@
 
 > ⚠️ Rhino is a PoC, experimental software. Don't use in production. ⚠️
 
+Key-value database for low-latency edge workloads built on top of FoundationDB.
+
+## Talks
+
+Rhino was presented at RustLab 2024. You can watch the recording [here](https://youtu.be/9B_v6CDFf-Y?si=WXXhPzcKf4BGN-iy).
+
 ## How Rhino is different from Turso?
 
 In terms of edge databases in general, [Turso](https://turso.tech/) is definitely the main competitor to Rhino. There are, however, three key differences:
